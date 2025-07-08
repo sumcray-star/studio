@@ -1,4 +1,4 @@
-# Firebase Studio
+# Text to Speech Application
 
 This is a NextJS starter in Firebase Studio.
 
