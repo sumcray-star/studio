@@ -45,29 +45,43 @@ export default function VocalizeApp() {
   const [rate, setRate] = useState(1);
   const [volume, setVolume] = useState(1);
   const [status, setStatus] = useState<Status>("idle");
+  const [isMounted, setIsMounted] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const populateVoiceList = useCallback(() => {
     const availableVoices = window.speechSynthesis.getVoices();
     if (availableVoices.length > 0) {
       setVoices(availableVoices);
-      if (!selectedVoice) {
-        // Prefer a Google US English voice if available, otherwise default to the first one
-        const googleVoice = availableVoices.find(
-          (voice) => voice.name === "Google US English"
-        );
-        setSelectedVoice(googleVoice || availableVoices[0]);
-      }
     }
-  }, [selectedVoice]);
+  }, []);
 
   useEffect(() => {
+    if (!isMounted) return;
+    // On client mount, populate voices.
+    // Voices may load asynchronously.
     populateVoiceList();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = populateVoiceList;
     }
-  }, [populateVoiceList]);
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
+  }, [isMounted, populateVoiceList]);
+
+  useEffect(() => {
+    // Set a default voice once voices are loaded, but only on the client.
+    if (isMounted && voices.length > 0 && !selectedVoice) {
+      const googleVoice = voices.find(
+        (voice) => voice.name === "Google US English"
+      );
+      setSelectedVoice(googleVoice || voices[0]);
+    }
+  }, [isMounted, voices, selectedVoice]);
   
   const handlePlay = () => {
     if (status === "paused") {
@@ -147,15 +161,16 @@ export default function VocalizeApp() {
               <div className="space-y-2">
                 <Label htmlFor="voice">Voice</Label>
                 <Select
-                  value={selectedVoice?.name}
+                  value={selectedVoice?.name || ""}
                   onValueChange={(name) => {
                     setSelectedVoice(
                       voices.find((voice) => voice.name === name) || null
                     );
                   }}
+                  disabled={!isMounted || voices.length === 0}
                 >
                   <SelectTrigger id="voice">
-                    <SelectValue placeholder="Select a voice" />
+                    <SelectValue placeholder="Loading voices..." />
                   </SelectTrigger>
                   <SelectContent>
                     {voices.map((voice) => (
@@ -175,6 +190,7 @@ export default function VocalizeApp() {
                   step={0.1}
                   value={[rate]}
                   onValueChange={(value) => setRate(value[0])}
+                  disabled={!isMounted}
                 />
               </div>
               <div className="space-y-2">
@@ -188,6 +204,7 @@ export default function VocalizeApp() {
                   step={0.1}
                   value={[volume]}
                   onValueChange={(value) => setVolume(value[0])}
+                  disabled={!isMounted}
                 />
               </div>
             </div>
@@ -200,7 +217,7 @@ export default function VocalizeApp() {
                 <Button
                   onClick={handlePlay}
                   size="lg"
-                  disabled={status === "playing" || !text}
+                  disabled={status === "playing" || !text || !isMounted}
                   className="bg-primary hover:bg-primary/90"
                 >
                   <Play className="h-5 w-5" />
@@ -236,7 +253,7 @@ export default function VocalizeApp() {
                   onClick={handleStop}
                   size="lg"
                   variant="outline"
-                  disabled={status === "idle"}
+                  disabled={status === "idle" || !isMounted}
                 >
                   <StopCircle className="h-5 w-5" />
                 </Button>
