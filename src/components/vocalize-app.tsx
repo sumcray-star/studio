@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -32,6 +32,7 @@ import PronunciationDialog from "./pronunciation-dialog";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Status = "idle" | "playing" | "paused" | "error";
 
@@ -53,36 +54,34 @@ export default function VocalizeApp() {
     setIsMounted(true);
   }, []);
 
-  const populateVoiceList = useCallback(() => {
-    const availableVoices = window.speechSynthesis.getVoices();
-    if (availableVoices.length > 0) {
-      setVoices(availableVoices);
-    }
-  }, []);
-
   useEffect(() => {
     if (!isMounted) return;
-    // On client mount, populate voices.
-    // Voices may load asynchronously.
+
+    const populateVoiceList = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      if (availableVoices.length > 0) {
+        setVoices(availableVoices);
+        setSelectedVoice((currentVoice) => {
+          if (currentVoice) return currentVoice;
+          const googleVoice = availableVoices.find(
+            (v) => v.name === "Google US English"
+          );
+          return googleVoice || availableVoices[0];
+        });
+      }
+    };
+    
     populateVoiceList();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = populateVoiceList;
     }
+
     return () => {
       speechSynthesis.onvoiceschanged = null;
+      window.speechSynthesis.cancel();
     };
-  }, [isMounted, populateVoiceList]);
+  }, [isMounted]);
 
-  useEffect(() => {
-    // Set a default voice once voices are loaded, but only on the client.
-    if (isMounted && voices.length > 0 && !selectedVoice) {
-      const googleVoice = voices.find(
-        (voice) => voice.name === "Google US English"
-      );
-      setSelectedVoice(googleVoice || voices[0]);
-    }
-  }, [isMounted, voices, selectedVoice]);
-  
   const handlePlay = () => {
     if (status === "paused") {
       window.speechSynthesis.resume();
@@ -134,6 +133,55 @@ export default function VocalizeApp() {
       });
   }
 
+  if (!isMounted) {
+    return (
+      <Card className="w-full max-w-2xl shadow-2xl">
+        <CardHeader>
+          <CardTitle className="text-3xl font-bold text-center text-primary">
+            Vocalize
+          </CardTitle>
+          <CardDescription className="text-center">
+            Your personal Text-to-Speech assistant.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[150px] w-full mb-6" />
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 font-medium text-primary">
+              <Settings className="h-5 w-5" />
+              <h3 className="text-lg">Controls</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-16 mb-2" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-24 mb-2" />
+                <Skeleton className="h-5 w-full" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-20 mb-2" />
+                <Skeleton className="h-5 w-full" />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-6">
+          <div className="flex gap-2">
+            <Skeleton className="h-12 w-28" />
+            <Skeleton className="h-12 w-12" />
+            <Skeleton className="h-12 w-12" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-36" />
+          </div>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <TooltipProvider>
       <Card className="w-full max-w-2xl shadow-2xl">
@@ -167,7 +215,7 @@ export default function VocalizeApp() {
                       voices.find((voice) => voice.name === name) || null
                     );
                   }}
-                  disabled={!isMounted || voices.length === 0}
+                  disabled={voices.length === 0}
                 >
                   <SelectTrigger id="voice">
                     <SelectValue placeholder="Loading voices..." />
@@ -190,7 +238,6 @@ export default function VocalizeApp() {
                   step={0.1}
                   value={[rate]}
                   onValueChange={(value) => setRate(value[0])}
-                  disabled={!isMounted}
                 />
               </div>
               <div className="space-y-2">
@@ -204,7 +251,6 @@ export default function VocalizeApp() {
                   step={0.1}
                   value={[volume]}
                   onValueChange={(value) => setVolume(value[0])}
-                  disabled={!isMounted}
                 />
               </div>
             </div>
@@ -217,7 +263,7 @@ export default function VocalizeApp() {
                 <Button
                   onClick={handlePlay}
                   size="lg"
-                  disabled={status === "playing" || !text || !isMounted}
+                  disabled={status === "playing" || !text}
                   className="bg-primary hover:bg-primary/90"
                 >
                   <Play className="h-5 w-5" />
@@ -253,7 +299,7 @@ export default function VocalizeApp() {
                   onClick={handleStop}
                   size="lg"
                   variant="outline"
-                  disabled={status === "idle" || !isMounted}
+                  disabled={status === "idle"}
                 >
                   <StopCircle className="h-5 w-5" />
                 </Button>
